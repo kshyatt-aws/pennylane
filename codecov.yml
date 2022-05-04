@@ -3,7 +3,7 @@ ignore:
 
 codecov:
   notify:
-    after_n_builds: 9
+    after_n_builds: 11
 
 comment:
-  after_n_builds: 9
+  after_n_builds: 11
