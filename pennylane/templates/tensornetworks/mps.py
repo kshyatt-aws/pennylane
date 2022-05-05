@@ -167,12 +167,6 @@ class MPS(Operation):
         .. math:: O = O_1 O_2 \dots O_n.
 
 
-<<<<<<< HEAD
-        with qml.tape.QuantumTape() as tape:
-            for idx, w in enumerate(self.ind_gates):
-                self.block(weights=self.template_weights[idx][:], wires=w)
-=======
->>>>>>> master
 
         .. seealso:: :meth:`~.MPS.decomposition`.
 
