@@ -21,7 +21,7 @@ import pennylane.numpy as np
 from pennylane.operation import Operation, AnyWires
 
 
-def compute_indices_MPS(wires, n_block_wires):
+def compute_indices_MPS(wires, n_block_wires, n_bond_wires):
     """Generate a list containing the wires for each block.
 
     Args:
@@ -33,8 +33,12 @@ def compute_indices_MPS(wires, n_block_wires):
 
     n_wires = len(wires)
 
-    if n_block_wires % 2 != 0:
-        raise ValueError(f"n_block_wires must be an even integer; got {n_block_wires}")
+    # if n_block_wires % 2 != 0:
+    #     raise ValueError(f"n_block_wires must be an even integer; got {n_block_wires}")
+    if (n_wires - n_block_wires) % (n_block_wires - n_bond_wires) > 0:
+        warnings.warn(
+            f"The number wires and number of block wires does not lead to an integer number of blocks."
+        )
 
     if n_block_wires < 2:
         raise ValueError(
@@ -46,19 +50,21 @@ def compute_indices_MPS(wires, n_block_wires):
             f"n_block_wires must be smaller than or equal to the number of wires; got n_block_wires = {n_block_wires} and number of wires = {n_wires}"
         )
 
-    if n_wires % (n_block_wires / 2) > 0:
-        warnings.warn(
-            f"The number of wires should be a multiple of {int(n_block_wires/2)}; got {n_wires}"
-        )
+    # if n_wires % (n_block_wires / 2) > 0:
+    #     warnings.warn(
+    #         f"The number of wires should be a multiple of {int(n_block_wires/2)}; got {n_wires}"
+    #     )
 
-    layers = [
-        [wires[idx] for idx in range(j, j + n_block_wires)]
-        for j in range(
-            0,
-            len(wires) - int(len(wires) % (n_block_wires // 2)) - n_block_wires // 2,
-            n_block_wires // 2,
-        )
-    ]
+    layers = np.array(
+        [
+            [wires[idx] for idx in range(j, j + n_block_wires)]
+            for j in range(
+                0,
+                len(wires) - n_block_wires + 1,
+                n_block_wires - n_bond_wires,
+            )
+        ]
+    )
 
     return layers
 
@@ -134,12 +140,13 @@ class MPS(Operation):
         block,
         n_params_block,
         template_weights=None,
+        n_bond_wires=None,
         do_queue=True,
         id=None,
     ):
-        ind_gates = compute_indices_MPS(wires, n_block_wires)
+        ind_gates = compute_indices_MPS(wires, n_block_wires, n_bond_wires)
         n_wires = len(wires)
-        n_blocks = int(n_wires / (n_block_wires / 2) - 1)
+        n_blocks = self.get_n_blocks(wires, n_block_wires,n_bond_wires)
 
         if template_weights is None:
             template_weights = np.random.rand(n_params_block, int(n_blocks))
@@ -182,7 +189,7 @@ class MPS(Operation):
         return [block(weights=weights[idx][:], wires=w.tolist()) for idx, w in enumerate(ind_gates)]
 
     @staticmethod
-    def get_n_blocks(wires, n_block_wires):
+    def get_n_blocks(wires, n_block_wires, n_bond_wires=None):
         """Returns the expected number of blocks for a set of wires and number of wires per block.
         Args:
             wires (Sequence): number of wires the template acts on
@@ -190,10 +197,18 @@ class MPS(Operation):
         Returns:
             n_blocks (int): number of blocks; expected length of the template_weights argument
         """
+        if n_bond_wires == None:
+            n_bond_wires = n_block_wires // 2
+
         n_wires = len(wires)
-        if n_wires % (n_block_wires / 2) > 0:
+        # if n_wires % (n_block_wires / 2) > 0:
+        #     warnings.warn(
+        #         f"The number of wires should be a multiple of {int(n_block_wires/2)}; got {n_wires}"
+        #     )
+
+        if (n_wires - n_block_wires) % (n_block_wires - n_bond_wires) > 0:
             warnings.warn(
-                f"The number of wires should be a multiple of {int(n_block_wires/2)}; got {n_wires}"
+                f"The number wires and number of block wires does not lead to an integer number of blocks."
             )
 
         if n_block_wires > n_wires:
@@ -201,5 +216,6 @@ class MPS(Operation):
                 f"n_block_wires must be smaller than or equal to the number of wires; got n_block_wires = {n_block_wires} and number of wires = {n_wires}"
             )
 
-        n_blocks = int(n_wires / (n_block_wires / 2) - 1)
-        return n_blocks
+        # n_blocks = int(n_wires / (n_block_wires / 2) - 1)
+        n_blocks = (n_wires - n_block_wires) // (n_block_wires - n_bond_wires) + 1
+        return int(n_blocks)
