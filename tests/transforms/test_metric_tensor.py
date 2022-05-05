@@ -71,14 +71,16 @@ class TestMetricTensor:
 
         params = np.array([0.1, 0.2], requires_grad=True)
         result = qml.metric_tensor(circuit, approx="block-diag")(*params)
-        assert qml.math.shape(result) == (2, 2)
+        assert isinstance(result, tuple) and len(result) == 2
+        assert qml.math.shape(result[0]) == ()
+        assert qml.math.shape(result[1]) == ()
 
     @pytest.mark.parametrize("diff_method", ["parameter-shift", "backprop"])
     def test_parameter_fan_out(self, diff_method):
-        """The metric tensor is always with respect to the quantum circuit. Any
-        classical processing is not taken into account. As a result, if there is
+        """The metric tensor is with respect to the quantum circuit and ignores
+        classical processing if ``hybrid=False``. As a result, if there is
         parameter fan-out, the returned metric tensor will be larger than
-        expected.
+        ``(len(args), len(args))`` if hybrid computation is deactivated.
         """
         dev = qml.device("default.qubit", wires=2)
 
@@ -88,7 +90,7 @@ class TestMetricTensor:
             return qml.expval(qml.PauliX(0))
 
         circuit = qml.QNode(circuit, dev, diff_method=diff_method)
-        params = [0.1]
+        params = np.array([0.1], requires_grad=True)
         result = qml.metric_tensor(circuit, hybrid=False, approx="block-diag")(*params)
         assert result.shape == (2, 2)
 
@@ -207,7 +209,8 @@ class TestMetricTensor:
         block-diagonal and diagonal setting."""
         dev = qml.device("default.qubit", wires=2)
 
-        def circuit(a, b, c):
+        def circuit(abc):
+            a, b, c = abc
             qml.RX(a, wires=0)
             qml.RY(b, wires=0)
             qml.CNOT(wires=[0, 1])
@@ -216,13 +219,12 @@ class TestMetricTensor:
 
         circuit = qml.QNode(circuit, dev)
 
-        a = np.array(0.432, requires_grad=True)
-        b = np.array(0.12, requires_grad=True)
-        c = np.array(-0.432, requires_grad=True)
+        abc = np.array([0.432, 0.12, -0.432], requires_grad=True)
+        a, b, c = abc
 
         # evaluate metric tensor
-        g_diag = qml.metric_tensor(circuit, approx="diag")(a, b, c)
-        g_blockdiag = qml.metric_tensor(circuit, approx="block-diag")(a, b, c)
+        g_diag = qml.metric_tensor(circuit, approx="diag")(abc)
+        g_blockdiag = qml.metric_tensor(circuit, approx="block-diag")(abc)
 
         # check that the metric tensor is correct
         expected = (
@@ -262,13 +264,13 @@ class TestMetricTensor:
             qml.RX(a[1], wires=0)
             qml.RY(a[0], wires=0)
             qml.CNOT(wires=[0, 1])
-            qml.PhaseShift(b, wires=1)
+            qml.U1(b, wires=1)
             return qml.expval(qml.PauliX(0)), qml.expval(qml.PauliX(1))
 
         circuit = qml.QNode(circuit, dev)
 
-        a = np.array([0.432, 0.1])
-        b = 0.12
+        a = np.array([0.432, 0.1], requires_grad=True)
+        b = np.array(0.12, requires_grad=True)
 
         # evaluate metric tensor
         g = qml.metric_tensor(circuit, approx="block-diag")(a, b)
@@ -578,7 +580,7 @@ class TestMetricTensor:
         """Test that a tape with Ising gates has the correct metric tensor tapes."""
 
         dev = qml.device("default.qubit", wires=3)
-        with qml.tape.JacobianTape() as tape:
+        with qml.tape.QuantumTape() as tape:
             qml.Hadamard(0)
             qml.Hadamard(2)
             qml.IsingXX(0.2, wires=[0, 1])
@@ -588,15 +590,56 @@ class TestMetricTensor:
 
         tapes, proc_fn = qml.metric_tensor(tape, approx="block-diag")
         assert len(tapes) == 4
-        assert [len(tape.operations) for tape in tapes] == [2, 4, 5, 6]
+        assert [len(tape.operations) for tape in tapes] == [3, 5, 4, 5]
         assert [len(tape.measurements) for tape in tapes] == [1] * 4
         expected_ops = [
-            [qml.Hadamard, qml.QubitUnitary],
-            [qml.Hadamard, qml.Hadamard, qml.IsingXX, qml.QubitUnitary],
-            [qml.Hadamard, qml.Hadamard, qml.IsingXX, qml.IsingXX, qml.QubitUnitary],
-            [qml.Hadamard, qml.Hadamard, qml.IsingXX, qml.IsingXX, qml.IsingZZ, qml.QubitUnitary],
+            [qml.Hadamard, qml.Hadamard, qml.Hadamard],
+            [qml.Hadamard, qml.Hadamard, qml.IsingXX, qml.Hadamard, qml.Hadamard],
+            [qml.Hadamard, qml.Hadamard, qml.IsingXX, qml.IsingXX],
+            [qml.Hadamard, qml.Hadamard, qml.IsingXX, qml.IsingXX, qml.IsingZZ],
         ]
         assert [[type(op) for op in tape.operations] for tape in tapes] == expected_ops
+
+    @pytest.mark.parametrize("interface", ["autograd", "jax", "torch", "tensorflow"])
+    def test_no_trainable_params_qnode(self, interface):
+        """Test that the correct ouput and warning is generated in the absence of any trainable
+        parameters"""
+        if interface != "autograd":
+            pytest.importorskip(interface)
+        dev = qml.device("default.qubit", wires=3)
+
+        @qml.qnode(dev, interface=interface)
+        def circuit(weights):
+            qml.RX(weights[0], wires=0)
+            qml.RY(weights[1], wires=0)
+            return qml.expval(qml.PauliZ(0) @ qml.PauliZ(1))
+
+        weights = [0.1, 0.2]
+        with pytest.warns(UserWarning, match="tensor of a QNode with no trainable parameters"):
+            res = qml.metric_tensor(circuit)(weights)
+
+        assert res == ()
+
+    def test_no_trainable_params_tape(self):
+        """Test that the correct ouput and warning is generated in the absence of any trainable
+        parameters"""
+        dev = qml.device("default.qubit", wires=3)
+
+        weights = [0.1, 0.2]
+        with qml.tape.QuantumTape() as tape:
+            qml.RX(weights[0], wires=0)
+            qml.RY(weights[1], wires=0)
+            qml.expval(qml.PauliZ(0) @ qml.PauliZ(1))
+
+        # TODO: remove once #2155 is resolved
+        tape.trainable_params = []
+
+        with pytest.warns(UserWarning, match="tensor of a tape with no trainable parameters"):
+            mt_tapes, post_processing = qml.metric_tensor(tape)
+        res = post_processing(qml.execute(mt_tapes, dev, None))
+
+        assert mt_tapes == []
+        assert res == ()
 
 
 fixed_pars = np.array([-0.2, 0.2, 0.5, 0.3, 0.7], requires_grad=False)
@@ -757,7 +800,7 @@ fubini_params = [
 ]
 
 
-def autodiff_metric_tensor(ansatz, num_wires, mimic_autograd=False):
+def autodiff_metric_tensor(ansatz, num_wires):
     """Compute the metric tensor by full state vector
     differentiation via autograd."""
     dev = qml.device("default.qubit", wires=num_wires)
@@ -774,13 +817,6 @@ def autodiff_metric_tensor(ansatz, num_wires, mimic_autograd=False):
         rjac = qml.jacobian(rqnode)(*params)
         ijac = qml.jacobian(iqnode)(*params)
 
-        if not mimic_autograd:
-            if len(params) > 1 and all(
-                qml.math.shape(p) == qml.math.shape(params[0]) for p in params[1:]
-            ):
-                rjac = tuple(qml.math.transpose(rjac))
-                ijac = tuple(qml.math.transpose(ijac))
-
         if isinstance(rjac, tuple):
             out = []
             for rc, ic in zip(rjac, ijac):
@@ -794,18 +830,10 @@ def autodiff_metric_tensor(ansatz, num_wires, mimic_autograd=False):
                 )
             return tuple(out)
 
-        if (
-            mimic_autograd
-            and len(params) > 1
-            and all(qml.math.shape(p) == qml.math.shape(params[0]) for p in params[1:])
-        ):
-            jac_contract = [-2]
-        else:
-            jac_contract = [0]
         jac = rjac + 1j * ijac
-        psidpsi = np.tensordot(np.conj(state), jac, axes=([0], jac_contract))
+        psidpsi = np.tensordot(np.conj(state), jac, axes=([0], [0]))
         return np.real(
-            np.tensordot(np.conj(jac), jac, axes=(jac_contract, jac_contract))
+            np.tensordot(np.conj(jac), jac, axes=([0], [0]))
             - np.tensordot(np.conj(psidpsi), psidpsi, axes=0)
         )
 
@@ -818,7 +846,7 @@ class TestFullMetricTensor:
 
     @pytest.mark.parametrize("ansatz, params", zip(fubini_ansatze, fubini_params))
     def test_correct_output_autograd(self, ansatz, params):
-        expected = autodiff_metric_tensor(ansatz, self.num_wires, True)(*params)
+        expected = autodiff_metric_tensor(ansatz, self.num_wires)(*params)
         dev = qml.device("default.qubit.autograd", wires=self.num_wires + 1)
 
         @qml.qnode(dev, interface="autograd")
@@ -1020,7 +1048,7 @@ class TestDifferentiability:
         def cost_full(*weights):
             return np.array(qml.metric_tensor(qnode, approx=None)(*weights))
 
-        _cost_full = lambda *weights: np.array(autodiff_metric_tensor(ansatz, 3, True)(*weights))
+        _cost_full = lambda *weights: np.array(autodiff_metric_tensor(ansatz, 3)(*weights))
         _c = _cost_full(*weights)
         c = cost_full(*weights)
         assert all(
@@ -1172,13 +1200,13 @@ def test_generator_no_expval(monkeypatch):
     """Test exception is raised if subcircuit contains an
     operation with generator object that is not an observable"""
     with monkeypatch.context() as m:
-        m.setattr("pennylane.RX.generator", [qml.RX, 1])
+        m.setattr("pennylane.RX.generator", lambda self: qml.RX(0.1, wires=0))
 
         with qml.tape.QuantumTape() as tape:
             qml.RX(np.array(0.5, requires_grad=True), wires=0)
             qml.expval(qml.PauliX(0))
 
-        with pytest.raises(qml.QuantumFunctionError, match="no corresponding observable"):
+        with pytest.raises(qml.QuantumFunctionError, match="is not an observable"):
             qml.metric_tensor(tape, approx="block-diag")
 
 
@@ -1251,16 +1279,19 @@ def test_error_generator_not_registered(allow_nonunitary, monkeypatch):
             with pytest.raises(ValueError, match="Generator for operation"):
                 qml.metric_tensor(circuit, approx=None, allow_nonunitary=allow_nonunitary)(x, z)
 
+    class RX(qml.RX):
+        def generator(self):
+            return qml.Hadamard(self.wires)
+
     @qml.qnode(dev)
     def circuit(x, z):
-        qml.RX(x, wires="wire1")
+        RX(x, wires="wire1")
         qml.RZ(z, wires="wire1")
         return qml.expval(qml.PauliZ("wire2"))
 
     with monkeypatch.context() as m:
         exp_fn = lambda tape, *args, **kwargs: tape
         m.setattr("pennylane.transforms.metric_tensor.expand_fn", exp_fn)
-        m.setattr("pennylane.RX.generator", [qml.Hadamard, 1.0])
 
         if allow_nonunitary:
             qml.metric_tensor(circuit, approx=None, allow_nonunitary=allow_nonunitary)(x, z)
@@ -1322,7 +1353,7 @@ def aux_wire_ansatz_1(x, y):
 def test_get_aux_wire(aux_wire, ansatz):
     """Test ``_get_aux_wire`` without device_wires."""
     x, y = np.array([0.2, 0.1], requires_grad=True)
-    with qml.tape.JacobianTape() as tape:
+    with qml.tape.QuantumTape() as tape:
         ansatz(x, y)
     out = _get_aux_wire(aux_wire, tape, None)
 
@@ -1335,7 +1366,7 @@ def test_get_aux_wire(aux_wire, ansatz):
 def test_get_aux_wire_with_device_wires():
     """Test ``_get_aux_wire`` with device_wires."""
     x, y = np.array([0.2, 0.1], requires_grad=True)
-    with qml.tape.JacobianTape() as tape:
+    with qml.tape.QuantumTape() as tape:
         qml.RX(x, wires=0)
         qml.RX(x, wires="one")
 

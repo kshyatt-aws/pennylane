@@ -80,7 +80,7 @@ def xy_mixer(graph: Union[nx.Graph, rx.PyGraph]):
 
     This mixer was introduced in *From the Quantum Approximate Optimization Algorithm
     to a Quantum Alternating Operator Ansatz* by Stuart Hadfield, Zhihui Wang, Bryan O'Gorman,
-    Eleanor G. Rieffel, Davide Venturelli, and Rupak Biswas [`arXiv:1709.03489 <https://arxiv.org/abs/1709.03489>`__].
+    Eleanor G. Rieffel, Davide Venturelli, and Rupak Biswas `Algorithms 12.2 (2019) <https://doi.org/10.3390/a12020034>`__.
 
     Args:
         graph (nx.Graph or rx.PyGraph): A graph defining the collections of wires on which the Hamiltonian acts.
@@ -151,7 +151,7 @@ def bit_flip_mixer(graph: Union[nx.Graph, rx.PyGraph], b: int):
     are the Pauli-Z and Pauli-X operators on vertex :math:`v`, respectively,
     and :math:`\mathbb{I}` is the identity operator.
 
-    This mixer was introduced in [`arXiv:1709.03489 <https://arxiv.org/abs/1709.03489>`__].
+    This mixer was introduced in `Hadfield et al. (2019) <https://doi.org/10.3390/a12020034>`__.
 
     Args:
          graph (nx.Graph or rx.PyGraph): A graph defining the collections of wires on which the Hamiltonian acts.
@@ -229,7 +229,7 @@ def bit_flip_mixer(graph: Union[nx.Graph, rx.PyGraph], b: int):
 
         final_terms = [qml.operation.Tensor(*list(m)).prune() for m in itertools.product(*n_terms)]
         final_coeffs = [
-            (0.5 ** degree) * functools.reduce(lambda x, y: x * y, list(m), 1)
+            (0.5**degree) * functools.reduce(lambda x, y: x * y, list(m), 1)
             for m in itertools.product(*n_coeffs)
         ]
 

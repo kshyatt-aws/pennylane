@@ -114,7 +114,7 @@ def init_state(scope="session"):
 
     def _init_state(n):
         """random initial state"""
-        state = np.random.random([2 ** n]) + np.random.random([2 ** n]) * 1j
+        state = np.random.random([2**n]) + np.random.random([2**n]) * 1j
         state /= np.linalg.norm(state)
         return state
 
@@ -160,8 +160,8 @@ class TestTFMatrix:
     )
     def test_one_qubit_tf_matrix(self, op, params, wires):
         tf_params = [tf.Variable(x) for x in params]
-        expected_mat = op(*params, wires=wires).matrix
-        obtained_mat = op(*tf_params, wires=wires).matrix
+        expected_mat = op(*params, wires=wires).matrix()
+        obtained_mat = op(*tf_params, wires=wires).matrix()
         assert qml.math.get_interface(obtained_mat) == "tensorflow"
         assert qml.math.allclose(qml.math.unwrap(obtained_mat), expected_mat)
 
@@ -176,12 +176,12 @@ class TestTFMatrix:
     )
     def test_pauli_rot_tf_(self, param, pauli, wires):
         op = qml.PauliRot(param, pauli, wires=wires)
-        expected_mat = op.matrix
-        expected_eigvals = op.eigvals
+        expected_mat = op.matrix()
+        expected_eigvals = op.eigvals()
 
         tf_op = qml.PauliRot(tf.Variable(param), pauli, wires=wires)
-        obtained_mat = tf_op.matrix
-        obtained_eigvals = tf_op.eigvals
+        obtained_mat = tf_op.matrix()
+        obtained_eigvals = tf_op.eigvals()
 
         assert qml.math.get_interface(obtained_mat) == "tensorflow"
         assert qml.math.get_interface(obtained_eigvals) == "tensorflow"
@@ -199,14 +199,14 @@ class TestTFMatrix:
         ],
     )
     def test_expand_tf_matrix(self, op, param, wires):
-        reg_mat = op(param, wires=wires).matrix
+        reg_mat = op(param, wires=wires).matrix()
 
         if len(wires) == 1:
             expected_mat = qml.math.kron(I, qml.math.kron(reg_mat, qml.math.kron(I, I)))
         else:
             expected_mat = qml.math.kron(I, qml.math.kron(reg_mat, I))
 
-        tf_mat = op(tf.Variable(param), wires=wires).matrix
+        tf_mat = op(tf.Variable(param), wires=wires).matrix()
         obtained_mat = qml.utils.expand(tf_mat, wires, list(range(4)))
 
         assert qml.math.get_interface(obtained_mat) == "tensorflow"
@@ -229,7 +229,7 @@ class TestApply:
         dev.apply([qml.BasisState(state, wires=[0, 1, 2, 3])])
 
         res = dev.state
-        expected = np.zeros([2 ** 4])
+        expected = np.zeros([2**4])
         expected[np.ravel_multi_index(state, [2] * 4)] = 1
 
         assert isinstance(res, tf.Tensor)
@@ -1350,7 +1350,7 @@ class TestPassthruIntegration:
         assert qml.math.isclose(hess_grad, -1.0)
         assert qml.math.isclose(hess_jac, -1.0)
 
-    @pytest.mark.parametrize("operation", [qml.U3, qml.U3.decomposition])
+    @pytest.mark.parametrize("operation", [qml.U3, qml.U3.compute_decomposition])
     @pytest.mark.parametrize("diff_method", ["backprop", "parameter-shift", "finite-diff"])
     def test_tf_interface_gradient(self, operation, diff_method, tol):
         """Tests that the gradient of an arbitrary U3 gate is correct
@@ -1548,3 +1548,20 @@ class TestHighLevelIntegration:
 
         assert isinstance(grad, tf.Tensor)
         assert grad.shape == weights.shape
+
+
+def test_asarray_ragged_dtype_conversion(monkeypatch):
+    """Test that the _asarray internal method handles ragged arrays well when
+    the dtype argument was provided."""
+    from tensorflow.python.framework.errors_impl import InvalidArgumentError
+
+    dev = qml.device("default.qubit.tf", wires=2)
+
+    def mock_func(arr, dtype):
+        raise InvalidArgumentError(
+            None, None, "SomeMessage"
+        )  # args passed are non-significant for test case
+
+    monkeypatch.setattr(tf, "convert_to_tensor", mock_func)
+    res = dev._asarray(np.array([1]), tf.float32)
+    assert res.dtype == tf.float32

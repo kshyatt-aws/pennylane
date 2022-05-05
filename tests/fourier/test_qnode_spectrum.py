@@ -20,7 +20,6 @@ import numpy as np
 import pennylane as qml
 from pennylane import numpy as pnp
 from pennylane.fourier.qnode_spectrum import qnode_spectrum, _process_ids
-from pennylane.transforms import classical_jacobian
 
 
 def circuit_0(a):
@@ -136,11 +135,11 @@ expected_spectra = [
 
 circuits_nonlinear = [circuit_6, circuit_7, circuit_8]
 
-a = 0.812
-b = -5.231
-x = np.array([0.1, -1.9, 0.7])
-y = np.array([[0.4, 5.5], [1.6, 5.1]])
-z = np.array([-1.9, -0.1, 0.49, 0.24])
+a = pnp.array(0.812, requires_grad=True)
+b = pnp.array(-5.231, requires_grad=True)
+x = pnp.array([0.1, -1.9, 0.7], requires_grad=True)
+y = pnp.array([[0.4, 5.5], [1.6, 5.1]], requires_grad=True)
+z = pnp.array([-1.9, -0.1, 0.49, 0.24], requires_grad=True)
 all_args = [(a,), (a, b), (x,), (x, y), (x, y), (x, y, z)]
 all_args_nonlinear = [(x, y, z), (a,), (a, x)]
 
@@ -270,7 +269,7 @@ class TestCircuits:
             qml.RY(3 * y, wires=1)
             return qml.expval(qml.PauliZ(wires=0))
 
-        x, y = [0.2, 0.1]
+        x, y = pnp.array([0.2, 0.1], requires_grad=True)
         y_freq = [-3.2, -3.0, -2.8, -0.2, 0.0, 0.2, 2.8, 3.0, 3.2]
 
         res = qnode_spectrum(circuit, argnum=[0])(x, y)
@@ -295,8 +294,10 @@ class TestCircuits:
             qml.RY(3 * Y[0, 0, 0], wires=1)
             return qml.expval(qml.PauliZ(wires=0))
 
-        x = -1.5
-        Y = np.array([0.2, -1.2, 9.2, -0.2, 1.1, 4, -0.201, 0.8]).reshape((2, 2, 2))
+        x = pnp.array(-1.5, requires_grad=True)
+        Y = pnp.array([0.2, -1.2, 9.2, -0.2, 1.1, 4, -0.201, 0.8], requires_grad=True).reshape(
+            (2, 2, 2)
+        )
         z = 1.2
 
         res = qnode_spectrum(circuit, encoding_args={"x"})(x, Y, z=z)
@@ -339,7 +340,7 @@ class TestCircuits:
 
         class nondecompRot(qml.Rot):
             @staticmethod
-            def decomposition(phi, theta, omega, wires):
+            def compute_decomposition(phi, theta, omega, wires):
                 """Pseudo-decomposition: Just return the gate itself."""
                 return [nondecompRot(phi, theta, omega, wires=wires)]
 
@@ -428,7 +429,8 @@ class TestTorch:
         dev = qml.device("default.qubit", wires=3)
         qnode = qml.QNode(circuit, dev, interface="torch")
 
-        res = qnode_spectrum(qnode, argnum=0)(x, w)
+        with pytest.warns(UserWarning, match=r"is_independent"):
+            res = qnode_spectrum(qnode, argnum=0)(x, w)
         assert res
         assert res == expected_result
 
@@ -441,7 +443,8 @@ class TestTorch:
         dev = qml.device("default.qubit", wires=2)
         qnode = qml.QNode(circuit, dev, interface="torch")
         with pytest.raises(ValueError, match="The Jacobian of the classical preprocessing"):
-            qnode_spectrum(qnode)(*args)
+            with pytest.warns(UserWarning, match=r"is_independent"):
+                qnode_spectrum(qnode)(*args)
 
 
 class TestTensorflow:

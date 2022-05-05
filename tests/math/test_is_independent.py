@@ -56,8 +56,8 @@ dependent_lambdas = [
     lambda x: x if abs(x) < 1e-5 else 0.0,  # x*delta for x=0 is okay
     lambda x: 1.0 if x > 0 else 0.0,  # Heaviside is okay numerically
     lambda x: 1.0 if x > 0 else 0.0,  # Heaviside is okay numerically
-    lambda x: qml.math.log(1 + qml.math.exp(1000.0 * x)) / 1000.0,  # Softplus is okay
-    lambda x: qml.math.log(1 + qml.math.exp(1000.0 * x)) / 1000.0,  # Softplus is okay
+    lambda x: qml.math.log(1 + qml.math.exp(100.0 * x)) / 100.0,  # Softplus is okay
+    lambda x: qml.math.log(1 + qml.math.exp(100.0 * x)) / 100.0,  # Softplus is okay
 ]
 
 args_dependent_lambdas = [
@@ -167,7 +167,7 @@ class TestIsIndependentAutograd:
         dependent_circuit,
         np.array,
         lambda x: np.array(x * 0.0),
-        lambda x: (1 + qml.math.tanh(1000 * x)) / 2,
+        lambda x: (1 + qml.math.tanh(100 * x)) / 2,
         *dependent_lambdas,
     ]
 
@@ -519,7 +519,7 @@ if have_torch:
 
         dependent_functions = [
             dependent_circuit,
-            torch.tensor,
+            torch.as_tensor,
             lambda x: (1 + qml.math.tanh(1000 * x)) / 2,
             *dependent_lambdas,
         ]
@@ -536,7 +536,8 @@ if have_torch:
         @pytest.mark.parametrize("func, args", zip(constant_functions, args_constant))
         def test_independent(self, func, args):
             """Tests that an independent function is correctly detected as such."""
-            assert is_independent(func, self.interface, args)
+            with pytest.warns(UserWarning, match=r"The function is_independent is only available"):
+                assert is_independent(func, self.interface, args)
 
         @pytest.mark.parametrize(
             "func, args, exp_fail",
@@ -544,10 +545,11 @@ if have_torch:
         )
         def test_dependent(self, func, args, exp_fail):
             """Tests that a dependent function is correctly detected as such."""
-            if exp_fail:
-                assert is_independent(func, self.interface, args)
-            else:
-                assert not is_independent(func, self.interface, args)
+            with pytest.warns(UserWarning, match=r"The function is_independent is only available"):
+                if exp_fail:
+                    assert is_independent(func, self.interface, args)
+                else:
+                    assert not is_independent(func, self.interface, args)
 
         @pytest.mark.xfail
         @pytest.mark.parametrize("func, args", zip(overlooked_lambdas, args_overlooked_lambdas))
@@ -562,9 +564,12 @@ if have_torch:
             f = lambda x, kw=False: 0.1 * x if kw else 0.2
             jac = lambda x, kw: torch.autograd.functional.jacobian(lambda x: f(x, kw), x)
             args = (torch.tensor(0.2),)
-            assert is_independent(f, self.interface, args)
-            assert not is_independent(f, self.interface, args, {"kw": True})
-            assert is_independent(jac, self.interface, args, {"kw": True})
+            with pytest.warns(UserWarning, match=r"The function is_independent is only available"):
+                assert is_independent(f, self.interface, args)
+            with pytest.warns(UserWarning, match=r"The function is_independent is only available"):
+                assert not is_independent(f, self.interface, args, {"kw": True})
+            with pytest.warns(UserWarning, match=r"The function is_independent is only available"):
+                assert is_independent(jac, self.interface, args, {"kw": True})
 
 
 class TestOther:

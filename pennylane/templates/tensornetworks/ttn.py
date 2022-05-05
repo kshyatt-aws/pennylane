@@ -56,31 +56,31 @@ def compute_indices(wires, n_block_wires):
     n_wires = 2 ** (int(np.log2(len(wires) / n_block_wires))) * n_block_wires
     n_layers = int(np.log2(n_wires // n_block_wires)) + 1
 
-    layers =[
-            [
-                wires[i]
-                for i in range(
-                    x + 2 ** (j - 1) * n_block_wires // 2 - n_block_wires // 2,
-                    x + n_block_wires // 2 + 2 ** (j - 1) * n_block_wires // 2 - n_block_wires // 2,
-                )
-            ]
-            + [
-                wires[i]
-                for i in range(
-                    x
-                    + 2 ** (j - 1) * n_block_wires // 2
-                    + 2 ** (j - 1) * n_block_wires // 2
-                    - n_block_wires // 2,
-                    x
-                    + 2 ** (j - 1) * n_block_wires // 2
-                    + n_block_wires // 2
-                    + 2 ** (j - 1) * n_block_wires // 2
-                    - n_block_wires // 2,
-                )
-            ]
-            for j in range(1, n_layers + 1)
-            for x in range(0, n_wires - n_block_wires // 2, 2 ** (j - 1) * n_block_wires)
+    layers = [
+        [
+            wires[i]
+            for i in range(
+                x + 2 ** (j - 1) * n_block_wires // 2 - n_block_wires // 2,
+                x + n_block_wires // 2 + 2 ** (j - 1) * n_block_wires // 2 - n_block_wires // 2,
+            )
         ]
+        + [
+            wires[i]
+            for i in range(
+                x
+                + 2 ** (j - 1) * n_block_wires // 2
+                + 2 ** (j - 1) * n_block_wires // 2
+                - n_block_wires // 2,
+                x
+                + 2 ** (j - 1) * n_block_wires // 2
+                + n_block_wires // 2
+                + 2 ** (j - 1) * n_block_wires // 2
+                - n_block_wires // 2,
+            )
+        ]
+        for j in range(1, n_layers + 1)
+        for x in range(0, n_wires - n_block_wires // 2, 2 ** (j - 1) * n_block_wires)
+    ]
 
     return layers
 
@@ -89,22 +89,34 @@ class TTN(Operation):
     """The TTN template broadcasts an input circuit across many wires following the architecture of a tree tensor network.
     The result is similar to the architecture in `arXiv:1803.11537 <https://arxiv.org/abs/1803.11537>`_.
 
-    The argument ``block`` is a user-defined quantum circuit.``block`` should have two arguments: ``weights`` and ``wires``.
-    For clarity, it is recommended to use a one-dimensional list or array for the block weights.
+    The argument ``block`` is a user-defined quantum circuit. Each ``block`` may depend on a different set of parameters.
+    These are passed as a list by the ``template_weights`` argument.
+
+    For more details, see *Usage Details* below.
 
     Args:
         wires (Iterable): wires that the template acts on
         n_block_wires (int): number of wires per block
         block (Callable): quantum circuit that defines a block
-        n_params_block (int): the number of parameters in a block; equal to the length of the ``weights`` argument in ``block``
+        n_params_block (int): the number of parameters in a block
         template_weights (Sequence): list containing the weights for all blocks
 
-    .. note::
+    .. details::
+        :title: Usage Details
 
-        The expected number of blocks can be obtained from ``qml.TTN.n_blocks(wires, n_block_wires)``.
-        The length of ``template_weights`` argument should match the number of blocks.
+        In general, the block takes D parameters and **must** have the following signature:
 
-    .. UsageDetails::
+        .. code-block:: python
+
+            unitary(parameter1, parameter2, ... parameterD, wires)
+
+        For a block with multiple parameters, ``n_params_block`` is equal to the number of parameters in ``block``.
+        For a block with a single parameter, ``n_params_block`` is equal to the length of the parameter.
+
+        To avoid using ragged arrays, all block parameters should have the same dimension.
+
+        The length of the ``template_weights`` argument should match the number of blocks.
+        The expected number of blocks can be obtained from ``qml.TTN.get_n_blocks(wires, n_block_wires)``.
 
         This example demonstrates the use of ``TTN`` for a simple block.
 
@@ -131,10 +143,11 @@ class TTN(Operation):
                 return qml.expval(qml.PauliZ(wires=n_wires-1))
 
         >>> print(qml.draw(circuit,expansion_strategy='device')(template_weights))
-        0: ──╭C──RY(0.1)─────────────────┤
-        1: ──╰X──RY(-0.3)──╭C──RY(0.1)───┤
-        2: ──╭C──RY(0.1)───│─────────────┤
-        3: ──╰X──RY(-0.3)──╰X──RY(-0.3)──┤ ⟨Z⟩
+        0: ─╭C──RY(0.10)────────────────┤
+        1: ─╰X──RY(-0.30)─╭C──RY(0.10)──┤
+        2: ─╭C──RY(0.10)──│─────────────┤
+        3: ─╰X──RY(-0.30)─╰X──RY(-0.30)─┤  <Z>
+
     """
 
     num_wires = AnyWires
@@ -143,7 +156,6 @@ class TTN(Operation):
     @property
     def num_params(self):
         return 1
-        
     def __init__(
         self,
         wires,
@@ -155,38 +167,61 @@ class TTN(Operation):
         id=None,
     ):
 
-        self.ind_gates = compute_indices(wires, n_block_wires)
+        ind_gates = compute_indices(wires, n_block_wires)
         n_wires = len(wires)
-        shape = qml.math.shape(template_weights)[-4:]  # (n_params_block, n_blocks)
-        self.n_params_block = n_params_block
-        self.n_blocks = 2 ** int(np.log2(n_wires / n_block_wires)) * 2 - 1
-        self.block = block
+        shape = qml.math.shape(template_weights)  # (n_params_block, n_blocks)
+        n_blocks = 2 ** int(np.log2(n_wires / n_block_wires)) * 2 - 1
 
-        if template_weights is None:
-            self.template_weights = np.random.rand(n_params_block, int(self.n_blocks))
+        if shape == ():
+            template_weights = np.random.rand(n_params_block, int(n_blocks))
 
         else:
-
-            if shape[0] != self.n_blocks:
+            if shape[0] != n_blocks:
                 raise ValueError(
-                    f"Weights tensor must have first dimension of length {self.n_blocks}; got {shape[0]}"
+                    f"Weights tensor must have first dimension of length {n_blocks}; got {shape[0]}"
                 )
-            if shape[-1] != self.n_params_block:
+            if shape[-1] != n_params_block:
                 raise ValueError(
-                    f"Weights tensor must have last dimension of length {self.n_params_block}; got {shape[-1]}"
+                    f"Weights tensor must have last dimension of length {n_params_block}; got {shape[-1]}"
                 )
 
-            self.template_weights = template_weights
+        self._hyperparameters = {"ind_gates": ind_gates, "block": block}
 
         super().__init__(template_weights, wires=wires, do_queue=do_queue, id=id)
 
-    def expand(self):
+    @staticmethod
+    def compute_decomposition(
+        weights, wires, block, ind_gates
+    ):  # pylint: disable=arguments-differ,unused-argument
+        r"""Representation of the operator as a product of other operators.
 
-        with qml.tape.QuantumTape() as tape:
-            for idx, w in enumerate(self.ind_gates):
-                self.block(weights=self.template_weights[idx][:], wires=w)
+        .. math:: O = O_1 O_2 \dots O_n.
 
-        return tape
+
+
+        .. seealso:: :meth:`~.TTN.decomposition`.
+
+        Args:
+            weights (list[tensor_like]): list containing the weights for all blocks
+            wires (Iterable): wires that the template acts on
+            block (Callable): quantum circuit that defines a block
+            ind_gates (array): array of wire indices
+
+        Returns:
+            list[.Operator]: decomposition of the operator
+        """
+        op_list = []
+        if block.__code__.co_argcount > 2:
+            for idx, w in enumerate(ind_gates):
+                op_list.append(block(*weights[idx], wires=w))
+        elif block.__code__.co_argcount == 2:
+            for idx, w in enumerate(ind_gates):
+                op_list.append(block(weights[idx], wires=w))
+        else:
+            for idx, w in enumerate(ind_gates):
+                op_list.append(block(wires=w))
+
+        return op_list
 
     @staticmethod
     def get_n_blocks(wires, n_block_wires):

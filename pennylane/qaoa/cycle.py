@@ -143,7 +143,7 @@ def wires_to_edges(graph: Union[nx.Graph, rx.PyGraph, rx.PyDiGraph]) -> Dict[int
 def cycle_mixer(graph: Union[nx.DiGraph, rx.PyDiGraph]) -> Hamiltonian:
     r"""Calculates the cycle-mixer Hamiltonian.
 
-    Following methods outlined `here <https://arxiv.org/pdf/1709.03489.pdf>`__, the
+    Following methods outlined `here <https://arxiv.org/abs/1709.03489>`__, the
     cycle-mixer Hamiltonian preserves the set of valid cycles:
 
     .. math::
@@ -438,7 +438,7 @@ def _square_hamiltonian_terms(
         elif isinstance(op2, qml.Identity):
             squared_ops.append(op1)
         # pylint: disable=unidiomatic-typecheck
-        elif op1.wires == op2.wires and type(op1) == type(op2):
+        elif op1.wires == op2.wires and isinstance(op1, type(op2)):
             squared_ops.append(qml.Identity(0))
         elif op2.wires[0] < op1.wires[0]:
             squared_ops.append(op2 @ op1)

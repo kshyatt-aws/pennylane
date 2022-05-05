@@ -112,6 +112,56 @@ class TestQNodeIntegration:
         assert np.allclose(state, expected, atol=tol, rtol=0)
 
 
+class TestDtypePreserved:
+    """Test that the user-defined dtype of the device is preserved for QNode
+    evaluation"""
+
+    @pytest.mark.parametrize("r_dtype", [np.float32, np.float64])
+    @pytest.mark.parametrize(
+        "measurement",
+        [
+            qml.expval(qml.PauliY(0)),
+            qml.var(qml.PauliY(0)),
+            qml.probs(wires=[1]),
+            qml.probs(wires=[2, 0]),
+        ],
+    )
+    def test_real_dtype(self, r_dtype, measurement, tol):
+        """Test that the default qubit plugin provides correct result for a simple circuit"""
+        p = 0.543
+
+        dev = qml.device("default.qubit.autograd", wires=3)
+        dev.R_DTYPE = r_dtype
+
+        @qml.qnode(dev, diff_method="backprop")
+        def circuit(x):
+            qml.RX(x, wires=0)
+            return qml.apply(measurement)
+
+        res = circuit(p)
+        assert res.dtype == r_dtype
+
+    @pytest.mark.parametrize("c_dtype", [np.complex64, np.complex128])
+    @pytest.mark.parametrize(
+        "measurement",
+        [qml.state(), qml.density_matrix(wires=[1]), qml.density_matrix(wires=[2, 0])],
+    )
+    def test_complex_dtype(self, c_dtype, measurement, tol):
+        """Test that the default qubit plugin provides correct result for a simple circuit"""
+        p = 0.543
+
+        dev = qml.device("default.qubit.autograd", wires=3)
+        dev.C_DTYPE = c_dtype
+
+        @qml.qnode(dev, diff_method="backprop")
+        def circuit(x):
+            qml.RX(x, wires=0)
+            return qml.apply(measurement)
+
+        res = circuit(p)
+        assert res.dtype == c_dtype
+
+
 class TestPassthruIntegration:
     """Tests for integration with the PassthruQNode"""
 
@@ -280,7 +330,10 @@ class TestPassthruIntegration:
         )
         assert np.allclose(res, expected_grad, atol=tol, rtol=0)
 
-    @pytest.mark.parametrize("x, shift", [(0.0, 0.0), (0.5, -0.5)])
+    @pytest.mark.parametrize(
+        "x, shift",
+        [np.array((0.0, 0.0), requires_grad=True), np.array((0.5, -0.5), requires_grad=True)],
+    )
     def test_hessian_at_zero(self, x, shift):
         """Tests that the Hessian at vanishing state vector amplitudes
         is correct."""
@@ -296,7 +349,7 @@ class TestPassthruIntegration:
         assert qml.math.isclose(qml.jacobian(qml.jacobian(circuit))(x), -1.0)
         assert qml.math.isclose(qml.grad(qml.grad(circuit))(x), -1.0)
 
-    @pytest.mark.parametrize("operation", [qml.U3, qml.U3.decomposition])
+    @pytest.mark.parametrize("operation", [qml.U3, qml.U3.compute_decomposition])
     @pytest.mark.parametrize("diff_method", ["backprop", "parameter-shift", "finite-diff"])
     def test_autograd_interface_gradient(self, operation, diff_method, tol):
         """Tests that the gradient of an arbitrary U3 gate is correct
@@ -422,7 +475,7 @@ class TestOps:
 
         param = np.array(0.3, requires_grad=True)
         res = qml.jacobian(circuit)(param)
-        assert np.allclose(res, np.zeros(wires ** 2))
+        assert np.allclose(res, np.zeros(wires**2))
 
     def test_inverse_operation_jacobian_backprop(self, tol):
         """Test that inverse operations work in backprop
