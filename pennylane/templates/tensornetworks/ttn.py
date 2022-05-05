@@ -156,6 +156,7 @@ class TTN(Operation):
     @property
     def num_params(self):
         return 1
+
     def __init__(
         self,
         wires,
@@ -232,6 +233,7 @@ class TTN(Operation):
         Returns:
             n_blocks (int): number of blocks; expected length of the template_weights argument
         """
+        
         n_wires = len(wires)
         if not np.log2(n_wires / n_block_wires).is_integer():
             warnings.warn(

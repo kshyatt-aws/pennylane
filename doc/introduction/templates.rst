@@ -170,11 +170,6 @@ can be broadcast with the shape and connectivity of tensor networks.
     :description: :doc:`Multi-scale Entanglement Renormalization Ansatz <../code/api/pennylane.MERA>`
     :figure: _static/templates/tensornetworks/MERA_template.png
 
-.. customgalleryitem::
-    :link: ../code/api/pennylane.TTN.html
-    :description: Tree Tensor Network
-    :figure: ../_static/templates/tensornetworks/TTN_template.png
-
 .. raw:: html
 
         <div style='clear:both'></div>
