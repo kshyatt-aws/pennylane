@@ -337,18 +337,17 @@ def classproperty(func):
 # =============================================================================
 
 
-def _process_data(op):
-
+def _serialize_data(op):
     # Use qml.math.real to take the real part. We may get complex inputs for
     # example when differentiating holomorphic functions with JAX: a complex
     # valued QNode (one that returns qml.state) requires complex typed inputs.
     if op.name in ("RX", "RY", "RZ", "PhaseShift", "Rot"):
-        return str([qml.math.round(qml.math.real(d) % (2 * np.pi), 10) for d in op.data])
+        return tuple([qml.math.round(qml.math.real(d) % (2 * np.pi), 10) for d in op.data])
 
     if op.name in ("CRX", "CRY", "CRZ", "CRot"):
-        return str([qml.math.round(qml.math.real(d) % (4 * np.pi), 10) for d in op.data])
+        return tuple([qml.math.round(qml.math.real(d) % (4 * np.pi), 10) for d in op.data])
 
-    return str(op.data)
+    return repr(op.data)
 
 
 class Operator(abc.ABC):
@@ -526,7 +525,7 @@ class Operator(abc.ABC):
                 str(self.name),
                 tuple(self.wires.tolist()),
                 repr(self.hyperparameters.values()),
-                _process_data(self),
+                _serialize_data(self),
             )
         )
 

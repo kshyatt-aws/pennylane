@@ -19,6 +19,7 @@ and measurement samples using AnnotatedQueues.
 """
 # pylint: disable=too-many-instance-attributes
 import copy
+from re import M
 import uuid
 import functools
 from enum import Enum
@@ -432,7 +433,7 @@ class MeasurementProcess:
             )
         else:
             fingerprint = (
-                str(self.obs.name),
+                repr(self.obs.name),
                 tuple(self.wires.tolist()),
                 repr(self.obs.data),
                 self.return_type,
