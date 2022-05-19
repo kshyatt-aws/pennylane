@@ -99,6 +99,7 @@ import itertools
 import functools
 import warnings
 from enum import IntEnum
+from xml.sax.handler import feature_string_interning
 from scipy.sparse import kron, eye, coo_matrix
 
 import numpy as np
@@ -323,7 +324,6 @@ class ClassPropertyDescriptor:  # pragma: no cover
         self.fset = func
         return self
 
-
 def classproperty(func):
     """The class property decorator"""
     if not isinstance(func, (classmethod, staticmethod)):
@@ -342,10 +342,10 @@ def _serialize_data(op):
     # example when differentiating holomorphic functions with JAX: a complex
     # valued QNode (one that returns qml.state) requires complex typed inputs.
     if op.name in ("RX", "RY", "RZ", "PhaseShift", "Rot"):
-        return repr([qml.math.round(qml.math.real(d) % (2 * np.pi), 10) for d in op.data])
+        return repr(tuple(qml.math.round(qml.math.real(d) % (2 * np.pi), 10) for d in op.data))
 
     if op.name in ("CRX", "CRY", "CRZ", "CRot"):
-        return repr([qml.math.round(qml.math.real(d) % (4 * np.pi), 10) for d in op.data])
+        return repr(tuple(qml.math.round(qml.math.real(d) % (4 * np.pi), 10) for d in op.data))
 
     return repr(op.data)
 
