@@ -60,7 +60,7 @@ class TestCircuitGraphHash:
         (
             returntype1,
             observable2,
-            "|||ObservableReturnTypes.Expectation!Hermitian![[ 1  0]\n [ 0 -1]]![0]",
+            "|||ObservableReturnTypes.Expectation!Hermitian!array([[ 1,  0],\n       [ 0, -1]])![0]",
         ),
         (
             returntype1,
@@ -71,7 +71,7 @@ class TestCircuitGraphHash:
         (
             returntype2,
             observable2,
-            "|||ObservableReturnTypes.Variance!Hermitian![[ 1  0]\n [ 0 -1]]![0]",
+            "|||ObservableReturnTypes.Variance!Hermitian!array([[ 1,  0],\n       [ 0, -1]])![0]",
         ),
         (returntype2, observable3, "|||ObservableReturnTypes.Variance!['PauliZ', 'PauliZ'][0, 1]"),
     ]

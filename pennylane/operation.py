@@ -342,10 +342,10 @@ def _serialize_data(op):
     # example when differentiating holomorphic functions with JAX: a complex
     # valued QNode (one that returns qml.state) requires complex typed inputs.
     if op.name in ("RX", "RY", "RZ", "PhaseShift", "Rot"):
-        return tuple([qml.math.round(qml.math.real(d) % (2 * np.pi), 10) for d in op.data])
+        return repr([qml.math.round(qml.math.real(d) % (2 * np.pi), 10) for d in op.data])
 
     if op.name in ("CRX", "CRY", "CRZ", "CRot"):
-        return tuple([qml.math.round(qml.math.real(d) % (4 * np.pi), 10) for d in op.data])
+        return repr([qml.math.round(qml.math.real(d) % (4 * np.pi), 10) for d in op.data])
 
     return repr(op.data)
 
