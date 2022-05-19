@@ -427,14 +427,14 @@ class MeasurementProcess:
             fingerprint = (
                 str(self.name),
                 tuple(self.wires.tolist()),
-                str(self.data),
+                repr(self.data),
                 self.return_type,
             )
         else:
             fingerprint = (
                 str(self.obs.name),
                 tuple(self.wires.tolist()),
-                str(self.obs.data),
+                repr(self.obs.data),
                 self.return_type,
             )
 

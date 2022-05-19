@@ -525,7 +525,7 @@ class Operator(abc.ABC):
             (
                 str(self.name),
                 tuple(self.wires.tolist()),
-                str(self.hyperparameters.values()),
+                repr(self.hyperparameters.values()),
                 _process_data(self),
             )
         )

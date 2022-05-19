@@ -207,10 +207,10 @@ class CircuitGraph:
 
             for param in op.data:
                 serialization_string += delimiter
-                serialization_string += str(param)
+                serialization_string += repr(param)
                 serialization_string += delimiter
 
-            serialization_string += str(op.wires.tolist())
+            serialization_string += repr(op.wires.tolist())
 
         # Adding a distinct separating string that could not occur by any combination of the
         # name of the operation and wires
@@ -222,10 +222,10 @@ class CircuitGraph:
             serialization_string += str(obs.name)
             for param in obs.data:
                 serialization_string += delimiter
-                serialization_string += str(param)
+                serialization_string += repr(param)
                 serialization_string += delimiter
 
-            serialization_string += str(obs.wires.tolist())
+            serialization_string += repr(obs.wires.tolist())
         return serialization_string
 
     @property
