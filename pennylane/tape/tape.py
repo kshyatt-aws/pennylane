@@ -20,6 +20,7 @@ import contextlib
 import copy
 from threading import RLock
 
+import numpy as np
 import pennylane as qml
 from pennylane.queuing import AnnotatedQueue, QueuingContext, QueuingError
 from pennylane.operation import DecompositionUndefinedError
@@ -1542,5 +1543,31 @@ class QuantumTape(AnnotatedQueue):
         fingerprint = []
         fingerprint.extend(op.hash for op in self.operations)
         fingerprint.extend(m.hash for m in self.measurements)
+        fingerprint.extend(self.trainable_params)
+        return hash(tuple(fingerprint))
+
+    @property
+    def hash_new(self):
+        """int: returns an integer hash uniquely representing the quantum tape"""
+        fingerprint = []
+        ops = hash(
+            tuple(
+                (
+                    str(op.name),
+                    tuple(op.wires.tolist()),
+                    repr(op.hyperparameters.values()),
+                    repr(op.data),
+                )
+                for op in self.operations
+            )
+        )
+        fingerprint.append(ops)
+        obs = hash(
+            tuple(
+                (str(m.name), tuple(m.wires.tolist()), repr(m.data), m.return_type)
+                for m in self.measurements
+            )
+        )
+        fingerprint.append(obs)
         fingerprint.extend(self.trainable_params)
         return hash(tuple(fingerprint))

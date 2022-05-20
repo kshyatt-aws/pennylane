@@ -324,6 +324,7 @@ class ClassPropertyDescriptor:  # pragma: no cover
         self.fset = func
         return self
 
+
 def classproperty(func):
     """The class property decorator"""
     if not isinstance(func, (classmethod, staticmethod)):
